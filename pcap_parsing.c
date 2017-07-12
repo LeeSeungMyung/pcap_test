@@ -20,8 +20,8 @@ struct ipv4_packet{
 	u_char TTL;
 	u_char protocol;
 	u_short checksum; //2byte
-	u_char dest_ipv4[IPV4_ALEN];
 	u_char src_ipv4[IPV4_ALEN];
+	u_char dest_ipv4[IPV4_ALEN];
 	//option...??
 } __attribute__((packed)); //disabled padding
 
