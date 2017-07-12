@@ -1,37 +1,40 @@
 #include <pcap.h>
 #include <stdio.h>
 #include <string.h>
+#include <netinet/in.h>
 #include "if_ether.h"
+//#include ""
 #define IPV4_ALEN 4 
 #define IPV6_ALEN 16
-#define ETHTYPE_ALEN 2
 
 struct ip_packet{
 	u_char version;
 	u_char TOS;
-	u_char tocal_length[2];
-	u_char identification;
-	u_char fragmentOffset[2];
+	u_short tocal_length; //2byte
+	u_short identification; //2byte
+	u_short fragmentOffset; //2byte
 	u_char TTL;
 	u_char protocol;
-	u_char checksum[2];
+	u_short checksum; //2byte
 	u_char dest_ipv4[IPV4_ALEN];
 	u_char src_ipv4[IPV4_ALEN];
 };
 struct ether_frame{
 	u_char dest_mac[ETH_ALEN];
 	u_char src_mac[ETH_ALEN];
-	u_char TYPE[ETHTYPE_ALEN];	
+	u_short type; //2byte
 };
 
 struct tcp_segment{
 	u_char dest_port;
 	u_char src_port;
 
-
 };
 
+u_short BigEndianToLittleEndian(u_short data){
 
+	return (data<<8)+(data>>8);
+}
 void printMacAddress(u_char* dest, u_char* src, const u_char* packet){
 	int i;
 	
@@ -52,7 +55,7 @@ void printMacAddress(u_char* dest, u_char* src, const u_char* packet){
 void printIpv4Address(u_char* dest, u_char* src, const u_char* packet){
 	int i = 0;
 	
-	printf("[IP ] ");
+	printf("[ IP] ");
 	
 	for(i = 0; i < IPV4_ALEN; i++){
 		printf("%d",src[i]);
@@ -122,21 +125,22 @@ int main(int argc, char *argv[])
 	memmove(&ether_header, packet, sizeof(struct ether_frame));
 	memmove(&ip_header, packet+sizeof(struct ether_frame), sizeof(struct ip_packet));
 	
-	printf("ether_header size : %d", sizeof(struct ether_frame));
-	printf("ip_header size : %d", sizeof(struct ip_packet));
-	printMacAddress(ether_header.dest_mac, ether_header.src_mac, packet);
-	printIpv4Address(ip_header.dest_ipv4, ip_header.src_ipv4, packet);
+	//2byte big endian to little endian
+	ether_header.type = BigEndianToLittleEndian(ether_header.type);
+
+	if(ether_header.type == ETH_P_IP){
+
+		printMacAddress(ether_header.dest_mac, ether_header.src_mac, packet);
+		printIpv4Address(ip_header.dest_ipv4, ip_header.src_ipv4, packet);
+	}
 
 	printf("header length: %d\n", header->caplen);
 	printf("========================\n");
-	//printf("%x%x%x%x%x", packet[0],packet[1],packet[2],packet[3],packet[4]);
-	//printf("test\n");
-	//printf("%x:%x",packet[12],packet[13]);
 	}	
-	/* Print its length */
-	//printf("Jacked a packet with length of [%d]\n", header.len);
-	/* And close the session */
+	
 	puts("[-]Closed service");
+	
 	pcap_close(handle);
+	
 	return(0);
  }
