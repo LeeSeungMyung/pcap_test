@@ -99,11 +99,11 @@ void printHttp(const u_char* packet){
 	
 	puts("[payload]");
 	for(i = 0; i < HTTP_MAX_LEN-1; i++){
-		if(packet[i] == 0x0d && packet[i+1] == 0x0a)
+		if(packet[i] == 0x0d && packet[i+1] == 0x0a) // new line
 			puts("");
-		else if(packet[i] < 32 || packet[i] > 127)
+		else if(packet[i] < 32 || packet[i] > 127) //ascii filter
 			printf(".");
-		else
+		else //is ascii, print
 			printf("%c", packet[i]);
 	}
 	puts("");
