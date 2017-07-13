@@ -9,7 +9,7 @@
 #define IPV4_ALEN 4 
 #define IPV6_ALEN 16
 #define HTTP 0x0050
-#define HTTP_MAX_LEN 300
+#define HTTP_MAX_LEN 400
 #define OPTION_LEN 40
 struct ipv4_packet{
 	u_char version_and_length;
@@ -44,13 +44,6 @@ struct tcp_segment{
 	u_char option[OPTION_LEN]; //option...??
 
 } __attribute__((packed));
-
-
-//only 2byte
-void BigEndianToLittleEndian(u_short* data){
-
-	*data = (*data<<8)+(*data>>8);
-}
 
 
 
@@ -99,13 +92,13 @@ void printHttp(const u_char* packet){
 	
 	puts("[payload]");
 
-	for(i = 0; i < HTTP_MAX_LEN-1; i++){
+	for(i = 0; i < HTTP_MAX_LEN-1; i++){	
 		if(packet[i] == 0x0d && packet[i+1] == 0x0a) // new line
 			puts("");
-		else if(packet[i] < 32 || packet[i] > 127) //ascii filter
-			printf(".");
-		else //ascii print
+		else if( isprint(packet[i]))
 			printf("%c", packet[i]);
+		else
+			printf(".");
 	}
 	puts("");
 
@@ -188,11 +181,11 @@ int main(int argc, char *argv[])
 	/*Set offset*/
 	offset = sizeof(struct ether_frame);
 
-	/*Only 2byte Big Endian to Little Endian*/
-	BigEndianToLittleEndian(&ether_header.type);
-
+	/*Big Endian to Little Endian*/
+	ether_header.type = ntohs(ether_header.type);
+	
 	/*is IPv4?*/
-	if(ether_header.type == ETH_P_IP){
+	if(ether_header.type == ETHERTYPE_IP){
 
 		/*Copy IPv4 header*/
 		memmove(&ipv4_header, packet+offset, sizeof(struct ipv4_packet));
@@ -209,18 +202,21 @@ int main(int argc, char *argv[])
 		/*is TCP?*/
 		if(ipv4_header.protocol == IPPROTO_TCP){
 			memmove(&tcp_header, packet+offset, sizeof(struct tcp_segment));	
-			/*Only 2byte Big Endian to Little Endian*/
-			BigEndianToLittleEndian(&tcp_header.dest_port);
-			BigEndianToLittleEndian(&tcp_header.src_port);
+			
+			/*Big Endian to Little Endian*/
+			tcp_header.dest_port = ntohs(tcp_header.dest_port);
+			tcp_header.src_port = ntohs(tcp_header.src_port);
 			
 			/*Parsing tcp length*/
 			tcp_length = ((tcp_header.length_and_reserved&0xf0)>>4)*4;
 
 			/*Print tcp header(port, length)*/
 			printPort(tcp_header.dest_port, tcp_header.src_port, tcp_length);
+			
 			/*TCP Next*/
 			offset += tcp_length;
 
+			/*is HTTP?*/
 			if(tcp_header.dest_port == HTTP || tcp_header.src_port == HTTP){
 				/*Print http packet*/
 				printHttp(packet+offset);
