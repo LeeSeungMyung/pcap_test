@@ -10,11 +10,11 @@
 #define IPV6_ALEN 16
 #define HTTP 0x0050
 #define HTTP_MAX_LEN 300
-
+#define OPTION_LEN 40
 struct ipv4_packet{
-	u_char version;
+	u_char version_and_length;
 	u_char TOS;
-	u_short tocal_length; //2byte
+	u_short total_length; //2byte
 	u_short identification; //2byte
 	u_short fragmentOffset; //2byte
 	u_char TTL;
@@ -22,28 +22,28 @@ struct ipv4_packet{
 	u_short checksum; //2byte
 	u_char src_ipv4[IPV4_ALEN];
 	u_char dest_ipv4[IPV4_ALEN];
-	//option...??
+	u_char option[OPTION_LEN]; //option...??
 } __attribute__((packed)); //disabled padding
 
 struct ether_frame{
 	u_char dest_mac[ETH_ALEN];
 	u_char src_mac[ETH_ALEN];
 	u_short type; //2byte
-}__attribute__((packed));
+} __attribute__((packed));
 
 struct tcp_segment{ 
 	u_short src_port; //2byte
 	u_short dest_port; //2byte
 	u_int seq_number; //4byte
 	u_int ack_number; //4byte
-	u_char offset_and_reserved;
+	u_char length_and_reserved;
 	u_char flag;
 	u_short window; //2byte
 	u_short checksum; //2byte
 	u_short urgent_pointer; //2byte
-	//option...??
+	u_char option[OPTION_LEN]; //option...??
 
-}__attribute__((packed));
+} __attribute__((packed));
 
 
 //only 2byte
@@ -54,7 +54,7 @@ void BigEndianToLittleEndian(u_short* data){
 
 
 
-void printMacAddress(u_char* dest, u_char* src, const u_char* packet){
+void printMacAddress(u_char* dest, u_char* src){
 	int i;
 	
 	printf("[MAC ] ");
@@ -71,7 +71,7 @@ void printMacAddress(u_char* dest, u_char* src, const u_char* packet){
 	puts("");
 }
 
-void printIpv4Address(u_char* dest, u_char* src, const u_char* packet){
+void printIpv4Address(u_char* dest, u_char* src, u_char length){
 	int i = 0;
 	
 	printf("[IP  ] ");
@@ -85,25 +85,26 @@ void printIpv4Address(u_char* dest, u_char* src, const u_char* packet){
 		printf("%hu", dest[i]); 
 		if(i+1 != IPV4_ALEN) printf(".");
 	}
-	puts("");
+	printf(", IPv4 Length : %hu\n", length);
 }
 
-void printPort(u_short dest, u_short src, const u_char* packet){
-
+void printPort(u_short dest, u_short src, u_char length){
 	int i = 0;
-	printf("[PORT] %hu > %hu\n",src, dest);
+
+	printf("[PORT] %hu > %hu, TCP Length : %hu\n",src, dest,length);
 }
 
 void printHttp(const u_char* packet){
 	int i = 0;
 	
 	puts("[payload]");
+
 	for(i = 0; i < HTTP_MAX_LEN-1; i++){
 		if(packet[i] == 0x0d && packet[i+1] == 0x0a) // new line
 			puts("");
 		else if(packet[i] < 32 || packet[i] > 127) //ascii filter
 			printf(".");
-		else //is ascii, print
+		else //ascii print
 			printf("%c", packet[i]);
 	}
 	puts("");
@@ -124,6 +125,7 @@ int main(int argc, char *argv[])
 	struct ipv4_packet ipv4_header;
 	struct ether_frame ether_header;
 	struct tcp_segment tcp_header;
+	u_char ipv4_length = 0, tcp_length;
 	int i = 0, status = 0, offset = 0;
 
 	/* Set Null*/
@@ -165,47 +167,69 @@ int main(int argc, char *argv[])
 	puts("[*]Starting service");
 	
 	while(1){
-	/* Grab a packet */
-	status = pcap_next_ex(handle, &header, &packet); //read
 
-	if(!status) //no packet
+	/* Grab a packet*/
+	status = pcap_next_ex(handle, &header, &packet);
+
+	/*No packet*/
+	if(!status)
 		continue;
 	
 
 
-	printf("=============================================================================\n");
+	printf("=======================================================================================\n");
 	
-	
+	/*Copy Ethernet header*/
 	memmove(&ether_header, packet, sizeof(struct ether_frame));
-	printMacAddress(ether_header.dest_mac, ether_header.src_mac, packet);
-	/*set offset*/
+
+	/*Print ether header*/
+	printMacAddress(ether_header.dest_mac, ether_header.src_mac);
+
+	/*Set offset*/
 	offset = sizeof(struct ether_frame);
 
 	/*Only 2byte Big Endian to Little Endian*/
 	BigEndianToLittleEndian(&ether_header.type);
 
+	/*is IPv4?*/
 	if(ether_header.type == ETH_P_IP){
 
+		/*Copy IPv4 header*/
 		memmove(&ipv4_header, packet+offset, sizeof(struct ipv4_packet));
-		printIpv4Address(ipv4_header.dest_ipv4, ipv4_header.src_ipv4, packet+offset);		
-		/*plus offset*/
-		offset += sizeof(struct ipv4_packet);
+		
+		/*Parsing IPv4 length*/
+		ipv4_length = (ipv4_header.version_and_length&0x0f)*4; 
+		
+		/*print IPv4 header(address, length)*/
+		printIpv4Address(ipv4_header.dest_ipv4, ipv4_header.src_ipv4, ipv4_length);
 
+		/*IPv4 Next*/
+		offset += ipv4_length;
+		
+		/*is TCP?*/
 		if(ipv4_header.protocol == IPPROTO_TCP){
 			memmove(&tcp_header, packet+offset, sizeof(struct tcp_segment));	
+			/*Only 2byte Big Endian to Little Endian*/
 			BigEndianToLittleEndian(&tcp_header.dest_port);
 			BigEndianToLittleEndian(&tcp_header.src_port);
 			
-			printPort(tcp_header.dest_port, tcp_header.src_port, packet+offset);
-			offset += sizeof(struct tcp_segment);
+			/*Parsing tcp length*/
+			tcp_length = ((tcp_header.length_and_reserved&0xf0)>>4)*4;
+
+			/*Print tcp header(port, length)*/
+			printPort(tcp_header.dest_port, tcp_header.src_port, tcp_length);
+			/*TCP Next*/
+			offset += tcp_length;
 
 			if(tcp_header.dest_port == HTTP || tcp_header.src_port == HTTP){
+				/*Print http packet*/
 				printHttp(packet+offset);
 			}
+			
 		}
 	}
 
-	printf("=============================================================================\n");
+	printf("=======================================================================================\n");
 	}	
 	
 	puts("[-]Closed service");
