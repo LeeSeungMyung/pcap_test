@@ -121,11 +121,11 @@ int main(int argc, char *argv[])
 	bpf_u_int32 net;		/* Our IP */
 	struct pcap_pkthdr *header;	/* The header that pcap gives us */
 	const u_char *packet;		/* The actual packet */
-	u_char *copy_packet = NULL;
 	struct ipv4_packet ipv4_header;
 	struct ether_frame ether_header;
 	struct tcp_segment tcp_header;
 	u_char ipv4_length = 0, tcp_length;
+	u_char *copy_packet = NULL;
 	int i = 0, status = 0, offset = 0;
 
 	/* Set Null*/
@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
 	
 
 
-	printf("=======================================================================================\n");
+	puts("=======================================================================================");
 	
 	/*Copy Ethernet header*/
 	memmove(&ether_header, packet, sizeof(struct ether_frame));
@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	printf("=======================================================================================\n");
+	puts("=======================================================================================");
 	}	
 	
 	puts("[-]Closed service");
