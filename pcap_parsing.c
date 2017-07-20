@@ -1,6 +1,7 @@
 #include <pcap.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
 #include <netinet/ether.h>
@@ -10,37 +11,38 @@
 #define IPV6_ALEN 16
 #define HTTP 0x0050
 #define OPTION_LEN 40
+
 struct ipv4_packet{
-	u_char version_and_length;
-	u_char TOS;
-	u_short total_length; //2byte
-	u_short identification; //2byte
-	u_short fragmentOffset; //2byte
-	u_char TTL;
-	u_char protocol;
-	u_short checksum; //2byte
-	u_char src_ipv4[IPV4_ALEN];
-	u_char dest_ipv4[IPV4_ALEN];
-	u_char option[OPTION_LEN]; //option...??
+	uint8_t version_and_length;
+	uint8_t TOS;
+	uint16_t total_length; //2byte
+	uint16_t identification; //2byte
+	uint16_t fragmentOffset; //2byte
+	uint8_t TTL;
+	uint8_t protocol;
+	uint16_t checksum; //2byte
+	uint8_t src_ipv4[IPV4_ALEN];
+	uint8_t dest_ipv4[IPV4_ALEN];
+	uint8_t option[OPTION_LEN]; //option...??
 } __attribute__((packed)); //disabled padding
 
 struct ether_frame{
-	u_char dest_mac[ETHER_ADDR_LEN];
-	u_char src_mac[ETHER_ADDR_LEN];
-	u_short type; //2byte
+	uint8_t dest_mac[ETHER_ADDR_LEN];
+	uint8_t src_mac[ETHER_ADDR_LEN];
+	uint16_t type; //2byte
 } __attribute__((packed));
 
 struct tcp_segment{ 
-	u_short src_port; //2byte
-	u_short dest_port; //2byte
-	u_int seq_number; //4byte
-	u_int ack_number; //4byte
-	u_char length_and_reserved;
-	u_char flag;
-	u_short window; //2byte
-	u_short checksum; //2byte
-	u_short urgent_pointer; //2byte
-	u_char option[OPTION_LEN]; //option...??
+	uint16_t src_port; //2byte
+	uint16_t dest_port; //2byte
+	uint32_t seq_number; //4byte
+	uint32_t ack_number; //4byte
+	uint8_t length_and_reserved;
+	uint8_t flag;
+	uint16_t window; //2byte
+	uint16_t checksum; //2byte
+	uint16_t urgent_pointer; //2byte
+	uint8_t option[OPTION_LEN]; //option...??
 
 } __attribute__((packed));
 
@@ -53,7 +55,7 @@ char* my_ether_ntoa_r(const struct ether_addr *addr, char *buf) {
 	return buf;
 }
 
-void printHttp(u_char* packet, int length){
+void http_process(uint8_t* packet, int length){
 	int i = 0;
 	
 	printf("[payload] HTTP Length : %d\n", length);
@@ -74,7 +76,7 @@ void printHttp(u_char* packet, int length){
 }
 
 
-struct ether_frame* ether_process(struct ether_frame* ether_header, u_char* length){
+struct ether_frame* ether_process(struct ether_frame* ether_header, uint8_t* length){
 	char mac_dest_str[18] = {0,};
 	char mac_src_str[18] = {0,};
 
@@ -90,7 +92,7 @@ struct ether_frame* ether_process(struct ether_frame* ether_header, u_char* leng
 	return ether_header;
 }
 
-struct ipv4_packet* ipv4_process(struct ipv4_packet* ipv4_header, u_char* length){	
+struct ipv4_packet* ipv4_process(struct ipv4_packet* ipv4_header, uint8_t* length){	
 	char ip_dest_str[16] = {0,};
 	char ip_src_str[16] = {0,};
 	/*Parsing IPv4 length*/
@@ -107,7 +109,7 @@ struct ipv4_packet* ipv4_process(struct ipv4_packet* ipv4_header, u_char* length
 	return ipv4_header;
 }
 
-struct tcp_segment* tcp_process(struct tcp_segment* tcp_header, u_char* length){
+struct tcp_segment* tcp_process(struct tcp_segment* tcp_header, uint8_t* length){
 
 	/*Big Endian to Little Endian*/
 	tcp_header->dest_port = ntohs(tcp_header->dest_port);
@@ -131,18 +133,25 @@ int main(int argc, char *argv[])
 	bpf_u_int32 mask;		/* Our netmask */
 	bpf_u_int32 net;		/* Our IP */
 	struct pcap_pkthdr *header;	/* The header that pcap gives us */
-	const u_char *packet;		/* The actual packet */
+	const uint8_t *packet;		/* The actual packet */
 	struct ipv4_packet* ipv4_header;
 	struct ether_frame* ether_header;
 	struct tcp_segment* tcp_header;
-	u_char ether_length = 0;
-	u_char ipv4_length = 0;
-	u_char tcp_length = 0;
-	u_char *copy_packet = NULL;
+	uint8_t ether_length = 0;
+	uint8_t ipv4_length = 0;
+	uint8_t tcp_length = 0;
+	uint8_t *copy_packet = NULL;
 	int status = 0;
 
+	if (argc != 2){
+		fprintf(stderr, "Argc != 2\n");
+		return(2);
+	}
+	
 	/* Define the device */
-	dev = pcap_lookupdev(errbuf);//get interface
+	//dev = pcap_lookupdev(errbuf);//get interface
+	dev = argv[1]; //get interface
+
 	if (dev == NULL) {
 		fprintf(stderr, "Couldn't find default device: %s\n", errbuf);
 		return(2);
@@ -154,7 +163,7 @@ int main(int argc, char *argv[])
 		mask = 0;
 	}
 	/* Open the session in promiscuous mode */
-	handle = pcap_open_live("dum0", BUFSIZ, 1, 1000, errbuf); //strin wlan0 //hardcoding "dum0"
+	handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
 	if (handle == NULL) {
 		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
 		return(2);
@@ -171,7 +180,7 @@ int main(int argc, char *argv[])
 
 
 	puts("[*] Starting service");	
-	puts("=============================================================================");
+	puts("==========================================================");
 
 	while(1){
 
@@ -186,21 +195,21 @@ int main(int argc, char *argv[])
 		
 		/*is IPv4?*/
 		if(ether_header->type == ETHERTYPE_IP){
-			ipv4_header = ipv4_process((struct ipv4_packet*)((u_char*)ether_header+ether_length), &ipv4_length);
+			ipv4_header = ipv4_process((struct ipv4_packet*)((uint8_t*)ether_header+ether_length), &ipv4_length);
 			
 			/*is TCP?*/
 			if(ipv4_header->protocol == IPPROTO_TCP){
-				tcp_header = tcp_process((struct tcp_segment*)((u_char*)ipv4_header+ipv4_length), &tcp_length);
+				tcp_header = tcp_process((struct tcp_segment*)((uint8_t*)ipv4_header+ipv4_length), &tcp_length);
 	
 				/*is HTTP?*/
 				if(tcp_header->dest_port == HTTP || tcp_header->src_port == HTTP){
 					if(ipv4_header->total_length > ipv4_length+tcp_length)
-						printHttp((u_char*)tcp_header+tcp_length, ipv4_header->total_length-(ipv4_length+tcp_length));
+						http_process((uint8_t*)tcp_header+tcp_length, ipv4_header->total_length-(ipv4_length+tcp_length));
 				}
 				
 			}
 		}
-		puts("=============================================================================");
+		puts("==========================================================");
 	}	
 	
 	puts("[-] Closed service");
