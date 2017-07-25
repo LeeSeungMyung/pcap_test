@@ -11,7 +11,7 @@
 #define IPV6_ALEN 16
 #define HTTP 0x0050
 #define OPTION_LEN 40
-
+#define MAC_ADDRSTRLEN 18
 struct ipv4_packet{
 	uint8_t version_and_length;
 	uint8_t TOS;
@@ -77,8 +77,8 @@ void http_process(uint8_t* packet, int length){
 
 
 struct ether_frame* ether_process(struct ether_frame* ether_header, uint8_t* length){
-	char mac_dest_str[18] = {0,};
-	char mac_src_str[18] = {0,};
+	char mac_dest_str[MAC_ADDRSTRLEN] = {0,};
+	char mac_src_str[MAC_ADDRSTRLEN] = {0,};
 
 	my_ether_ntoa_r((struct ether_addr*)ether_header->src_mac, mac_src_str);
 	my_ether_ntoa_r((struct ether_addr*)ether_header->dest_mac, mac_dest_str);
@@ -93,8 +93,8 @@ struct ether_frame* ether_process(struct ether_frame* ether_header, uint8_t* len
 }
 
 struct ipv4_packet* ipv4_process(struct ipv4_packet* ipv4_header, uint8_t* length){	
-	char ip_dest_str[16] = {0,};
-	char ip_src_str[16] = {0,};
+	char ip_dest_str[INET_ADDRSTRLEN] = {0,};
+	char ip_src_str[INET_ADDRSTRLEN] = {0,};
 	/*Parsing IPv4 length*/
 	*length = (ipv4_header->version_and_length&0x0f)*4; 
 
